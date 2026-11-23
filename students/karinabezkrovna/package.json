@@ -1,0 +1,14 @@
+﻿{
+  "name": "karina-taskflow",
+  "version": "1.0.0",
+  "description": "TaskFlow - DevOps final project",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
