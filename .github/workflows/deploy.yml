@@ -1,0 +1,68 @@
+
+name: TaskFlow Docker CI CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: students/karinabezkrovna
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: students/karinabezkrovna/package-lock.json
+
+      - name: Install and test
+        run: |
+          npm ci
+          npm test
+
+      - name: Docker Hub login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and push
+        env:
+          USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        run: |
+          docker build -t "$USERNAME/karina-taskflow:latest" .
+          docker push "$USERNAME/karina-taskflow:latest"
+
+      - name: Deploy on EC2
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          SSH_USER: ${{ secrets.EC2_USER }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY_B64 }}
+          DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s' "$SSH_KEY" | base64 -d > ~/.ssh/key.pem
+          chmod 600 ~/.ssh/key.pem
+
+          ssh -o StrictHostKeyChecking=accept-new \
+            -o ConnectTimeout=15 \
+            -i ~/.ssh/key.pem "$SSH_USER@$HOST" \
+            "sudo docker pull $DOCKER_USER/karina-taskflow:latest &&
+             (sudo docker rm -f taskflow || true) &&
+             sudo docker run -d --restart unless-stopped \
+               --name taskflow -p 3000:3000 \
+               $DOCKER_USER/karina-taskflow:latest"
